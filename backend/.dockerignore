@@ -1,0 +1,18 @@
+# Dependencies
+node_modules
+npm-debug.log
+
+# Environment & Credentials
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+serviceAccountKey*.json
+firebase-adminsdk*.json
+credentials.json
+
+# Git
+.git
+.gitignore

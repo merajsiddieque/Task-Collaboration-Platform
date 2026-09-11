@@ -1,0 +1,16 @@
+# Dependencies & Build
+node_modules
+dist
+dist-ssr
+
+# Environment & Credentials
+.env
+.env.*
+*.env
+*.pem
+*.key
+credentials.json
+
+# Git
+.git
+.gitignore

@@ -1,25 +1,35 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { DndContext, closestCorners } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-
+import { motion } from "framer-motion";
 import useBoardData from "../hooks/useBoardData";
 import useBoardSearch from "../hooks/useBoardSearch";
 import useBoardSocket from "../hooks/useBoardSocket";
-import TaskCard from "../components/TaskCard";
 import BoardNavbar from "../components/BoardNavbar";
-import ActivityPanel from "../components/ActivityPanel";
+import ListColumn from "../components/ListColumn";
+import ActivitySidebar from "../components/ActivitySidebar";
 import axios from "../api/axios";
+import { Plus, Loader2 } from "lucide-react";
 
 export default function BoardDetails() {
   const { id } = useParams();
+  const [filterPriority, setFilterPriority] = useState("");
+  const [addingList, setAddingList] = useState(false);
+  const [newListTitle, setNewListTitle] = useState("");
 
   /* ================= DATA HOOKS ================= */
 
-  const { lists, tasks, members, setTasks, setLists, loading, fetchLists } =
-    useBoardData(id);
+  const {
+    board,
+    lists,
+    tasks,
+    members,
+    setTasks,
+    setLists,
+    loading,
+    fetchLists,
+    fetchBoard,
+  } = useBoardData(id);
 
   const { searchQuery, setSearchQuery, isSearching } = useBoardSearch(
     id,
@@ -31,8 +41,9 @@ export default function BoardDetails() {
 
   /* ================= ACTIONS ================= */
 
-  const createList = async () => {
-    const title = prompt("Enter list title:");
+  const createList = async (e) => {
+    if (e) e.preventDefault();
+    const title = newListTitle.trim();
     if (!title) return;
 
     try {
@@ -46,23 +57,41 @@ export default function BoardDetails() {
         ...prev,
         [res.data._id]: [],
       }));
+      setNewListTitle("");
+      setAddingList(false);
     } catch (error) {
-      console.log(error);
+      console.error("Error creating list:", error);
+    }
+  };
+
+  const deleteList = async (listId) => {
+    if (!window.confirm("Are you sure you want to delete this list and all its tasks?")) return;
+
+    try {
+      await axios.delete(`/lists/${listId}`);
+      setLists((prev) => prev.filter((l) => l._id !== listId));
+      setTasks((prev) => {
+        const copy = { ...prev };
+        delete copy[listId];
+        return copy;
+      });
+    } catch (error) {
+      console.error("Error deleting list:", error);
     }
   };
 
   const createTask = async (listId) => {
     const title = prompt("Enter task title:");
-    if (!title) return;
+    if (!title || !title.trim()) return;
 
     try {
       await axios.post("/tasks", {
-        title,
+        title: title.trim(),
         listId,
         boardId: id,
       });
     } catch (error) {
-      console.log(error);
+      console.error("Error creating task:", error);
     }
   };
 
@@ -72,7 +101,20 @@ export default function BoardDetails() {
     try {
       await axios.delete(`/tasks/${taskId}`);
     } catch (error) {
-      console.log(error);
+      console.error("Error deleting task:", error);
+    }
+  };
+
+  const inviteMember = async () => {
+    const email = prompt("Enter team member's email to invite to this board:");
+    if (!email) return;
+
+    try {
+      await axios.post(`/boards/${id}/invite`, { email: email.trim() });
+      alert("Member invited successfully!");
+      if (fetchBoard) fetchBoard();
+    } catch (error) {
+      alert(error.response?.data?.message || "Error inviting member");
     }
   };
 
@@ -108,9 +150,7 @@ export default function BoardDetails() {
 
       // Find source
       for (let listId in newTasks) {
-        const index = newTasks[listId].findIndex(
-          (t) => t._id === active.id
-        );
+        const index = newTasks[listId].findIndex((t) => t._id === active.id);
         if (index !== -1) {
           sourceListId = listId;
           movedTask = newTasks[listId][index];
@@ -125,9 +165,7 @@ export default function BoardDetails() {
         newPosition = newTasks[targetListId].length;
       } else {
         for (let listId in newTasks) {
-          const index = newTasks[listId].findIndex(
-            (t) => t._id === over.id
-          );
+          const index = newTasks[listId].findIndex((t) => t._id === over.id);
           if (index !== -1) {
             targetListId = listId;
             newPosition = index;
@@ -154,7 +192,7 @@ export default function BoardDetails() {
       return newTasks;
     });
 
-    // Persist
+    // Persist to backend
     if (movedTask) {
       try {
         await axios.put(`/tasks/${movedTask._id}`, {
@@ -162,7 +200,7 @@ export default function BoardDetails() {
           position: newPosition,
         });
       } catch (error) {
-        console.log(error);
+        console.error("Error moving task:", error);
       }
     }
   };
@@ -170,130 +208,119 @@ export default function BoardDetails() {
   /* ================= LOADING ================= */
 
   if (loading) {
-    return <h2 style={{ padding: "30px" }}>Loading board...</h2>;
+    return (
+      <div className="min-h-screen bg-[#020817] text-white flex flex-col items-center justify-center">
+        <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+        <p className="text-sm font-semibold tracking-wide text-slate-400">
+          Loading Kanban Workspace...
+        </p>
+      </div>
+    );
   }
 
-  /* ================= UI ================= */
-
   return (
-    <div style={styles.page}>
-      <BoardNavbar
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        isSearching={isSearching}
-      />
+    <div className="min-h-screen bg-[#020817] text-white relative overflow-hidden selection:bg-indigo-500 selection:text-white pb-10">
+      {/* Ambient background glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,.22),transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,.18),transparent_40%)] pointer-events-none" />
 
-      <div style={styles.contentWrapper}>
-        {/* BOARD SECTION */}
-        <div style={styles.boardSection}>
-          <button style={styles.addListBtn} onClick={createList}>
-            + Add List
-          </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 pt-4">
+        {/* Board Header Navbar */}
+        <BoardNavbar
+          boardTitle={board?.title || "Project Board"}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          isSearching={isSearching}
+          members={members}
+          onInvite={inviteMember}
+          filterPriority={filterPriority}
+          setFilterPriority={setFilterPriority}
+          onAddList={() => setAddingList(true)}
+        />
 
-          <DndContext
-            collisionDetection={closestCorners}
-            onDragEnd={handleDragEnd}
-          >
-            <div style={styles.listContainer}>
-              {lists.map((list) => (
-                <div key={list._id} style={styles.listCard}>
-                  <h3>{list.title}</h3>
+        {/* Main Kanban & Activity Viewport */}
+        <main className="flex gap-6 items-start overflow-hidden pt-2">
+          {/* Kanban Board Container with horizontal snap scroll per spec */}
+          <section className="flex-1 min-w-0 flex flex-col">
+            <DndContext
+              collisionDetection={closestCorners}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="flex gap-6 overflow-x-auto pb-6 snap-x custom-scrollbar pt-1 px-1">
+                {/* Kanban List Columns */}
+                {lists.map((list, idx) => {
+                  const columnTasks = tasks[list._id] || [];
 
-                  <SortableContext
-                    items={(tasks[list._id] || []).map((t) => t._id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {(tasks[list._id] || []).map((task) => (
-                      <TaskCard
-                        key={task._id}
-                        task={task}
-                        members={members}
-                        onDelete={deleteTask}
-                        onTaskUpdate={handleTaskUpdate}
+                  return (
+                    <ListColumn
+                      key={list._id}
+                      index={idx}
+                      list={list}
+                      tasks={columnTasks}
+                      members={members}
+                      onDeleteList={deleteList}
+                      onCreateTask={createTask}
+                      onDeleteTask={deleteTask}
+                      onTaskUpdate={handleTaskUpdate}
+                    />
+                  );
+                })}
+
+                {/* Inline Add List Card */}
+                <div className="w-[320px] flex-shrink-0 snap-start">
+                  {addingList ? (
+                    <motion.form
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onSubmit={createList}
+                      className="p-5 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl space-y-3"
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Enter list title..."
+                        value={newListTitle}
+                        onChange={(e) => setNewListTitle(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
                       />
-                    ))}
-                  </SortableContext>
-
-                  <button
-                    style={styles.addTaskBtn}
-                    onClick={() => createTask(list._id)}
-                  >
-                    + Add Task
-                  </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={!newListTitle.trim()}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-semibold shadow-md disabled:opacity-50 transition"
+                        >
+                          Add List
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAddingList(false);
+                            setNewListTitle("");
+                          }}
+                          className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-medium transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </motion.form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAddingList(true)}
+                      className="w-full py-8 px-5 rounded-3xl border-2 border-dashed border-white/10 hover:border-indigo-500/50 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-sm font-semibold flex items-center justify-center gap-2 transition duration-200 group cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 group-hover:scale-125 transition-transform" />
+                      <span>Add Another List</span>
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
-          </DndContext>
-        </div>
+              </div>
+            </DndContext>
+          </section>
 
-        {/* ACTIVITY PANEL */}
-        <div style={styles.activityWrapper}>
-          <ActivityPanel boardId={id} />
-        </div>
+          {/* Sticky Activity Sidebar */}
+          <ActivitySidebar boardId={id} members={members} />
+        </main>
       </div>
     </div>
   );
 }
-
-/* ================= STYLES ================= */
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    padding: "30px",
-  },
-
-  contentWrapper: {
-    display: "flex",
-    gap: "25px",
-    alignItems: "flex-start",
-    flexWrap: "wrap", // 🔥 responsive fix
-  },
-
-  boardSection: {
-    flex: 1,
-    minWidth: "600px",
-  },
-
-  activityWrapper: {
-    width: "280px",
-    minWidth: "240px",
-    flexShrink: 0,
-  },
-
-  listContainer: {
-    display: "flex",
-    gap: "20px",
-    overflowX: "auto",
-  },
-
-  listCard: {
-    minWidth: "260px",
-    backgroundColor: "white",
-    padding: "15px",
-    borderRadius: "12px",
-    boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-  },
-
-  addListBtn: {
-    marginBottom: "20px",
-    padding: "10px 15px",
-    borderRadius: "8px",
-    backgroundColor: "#667eea",
-    color: "white",
-    border: "none",
-    cursor: "pointer",
-  },
-
-  addTaskBtn: {
-    marginTop: "10px",
-    padding: "8px",
-    width: "100%",
-    borderRadius: "6px",
-    border: "none",
-    backgroundColor: "#667eea",
-    color: "white",
-    cursor: "pointer",
-  },
-};

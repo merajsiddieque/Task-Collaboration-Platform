@@ -51,3 +51,49 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Google Auth (Sign in with Google, stored in MongoDB)
+exports.googleAuth = async (req, res) => {
+  try {
+    const { name, email, googleId, avatar } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required from Google" });
+    }
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Create new user for first-time Google sign in
+      user = await User.create({
+        name: name || email.split("@")[0],
+        email,
+        avatar: avatar || "",
+        googleId: googleId || "",
+      });
+    } else {
+      // Update avatar or googleId if newly provided
+      let updated = false;
+      if (avatar && !user.avatar) {
+        user.avatar = avatar;
+        updated = true;
+      }
+      if (googleId && !user.googleId) {
+        user.googleId = googleId;
+        updated = true;
+      }
+      if (updated) {
+        await user.save();
+      }
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({ user, token });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
