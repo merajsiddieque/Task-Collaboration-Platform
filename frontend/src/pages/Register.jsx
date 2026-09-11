@@ -1,5 +1,6 @@
 import { useState, useContext, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import axios from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
 import { auth, googleProvider } from "../firebase";
@@ -14,6 +15,12 @@ import {
   Sparkles,
   AlertCircle,
   ShieldCheck,
+  AlertTriangle,
+  Copy,
+  Check,
+  ExternalLink,
+  Globe,
+  CheckCircle2,
 } from "lucide-react";
 
 export default function Register() {
@@ -24,10 +31,22 @@ export default function Register() {
   });
 
   const [errorMsg, setErrorMsg] = useState("");
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState(null);
+
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  // Detect environment
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+  const currentHostname =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
 
   // Redirect if already logged in
   useEffect(() => {
@@ -37,9 +56,16 @@ export default function Register() {
     }
   }, [navigate]);
 
+  const handleCopyDomain = () => {
+    navigator.clipboard.writeText(currentHostname);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   /* ================= GOOGLE AUTHENTICATION ================= */
   const handleGoogleSignIn = async () => {
     setErrorMsg("");
+    setUnauthorizedDomain(false);
     setGoogleLoading(true);
 
     try {
@@ -53,16 +79,24 @@ export default function Register() {
         avatar: googleUser.photoURL || "",
       });
 
+      setToast({
+        type: "success",
+        message: "Account authorized! Setting up workspace...",
+      });
       login(res.data.token, res.data.user);
-      navigate("/boards");
+
+      setTimeout(() => {
+        navigate("/boards");
+      }, 600);
     } catch (error) {
       console.error("Firebase Google Sign In Error:", error);
-      if (error.code === "auth/popup-closed-by-user") {
+
+      if (error.code === "auth/unauthorized-domain") {
+        setUnauthorizedDomain(true);
+      } else if (error.code === "auth/popup-closed-by-user") {
         setErrorMsg("Google sign-in popup was closed before completing.");
-      } else if (error.code === "auth/unauthorized-domain") {
-        setErrorMsg(
-          `Domain "${window.location.hostname}" is not authorized in Firebase Console. Please add "${window.location.hostname}" to Authorized Domains in Firebase Authentication Settings.`
-        );
+      } else if (error.code === "auth/cancelled-popup-request") {
+        setErrorMsg("Only one sign-in popup can be opened at a time.");
       } else {
         setErrorMsg(
           error.response?.data?.message ||
@@ -82,13 +116,21 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
+    setUnauthorizedDomain(false);
     setLoading(true);
 
     try {
       const res = await axios.post("/auth/register", form);
 
+      setToast({
+        type: "success",
+        message: "Registration successful! Welcome to TaskFlow...",
+      });
       login(res.data.token, res.data.user);
-      navigate("/boards");
+
+      setTimeout(() => {
+        navigate("/boards");
+      }, 600);
     } catch (error) {
       setErrorMsg(
         error.response?.data?.message || "Registration failed"
@@ -103,8 +145,35 @@ export default function Register() {
       {/* Ambient background glow per TaskFlow UI v2 spec */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,.22),transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,.18),transparent_40%)] pointer-events-none" />
 
+      {/* Floating Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`fixed top-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl border backdrop-blur-2xl shadow-2xl text-xs font-semibold ${
+              toast.type === "success"
+                ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-200"
+                : "bg-rose-950/80 border-rose-500/40 text-rose-200"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400" />
+            )}
+            <span>{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Brand Header */}
-      <div className="flex items-center gap-3 mb-8 relative z-10">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-3 mb-8 relative z-10"
+      >
         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/30">
           <Brain className="w-6 h-6" />
         </div>
@@ -114,10 +183,26 @@ export default function Register() {
             <Sparkles className="w-3 h-3" /> Premium SaaS Workspace
           </p>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Register Glass Card per TaskFlow UI v2 spec */}
-      <div className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10">
+      {/* Register Glass Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10"
+      >
+        {/* Environment Pill Indicator */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
+            <Globe className="w-3 h-3 text-indigo-400" />
+            <span>{isLocalhost ? "Localhost Dev" : "Vercel Production"}</span>
+          </span>
+          <span className="text-[10px] font-mono text-slate-500 truncate max-w-[170px]">
+            {currentHostname}
+          </span>
+        </div>
+
         <div className="text-center mb-6">
           <h2 className="text-xl font-bold text-white tracking-tight">
             Create Your Account
@@ -127,26 +212,101 @@ export default function Register() {
           </p>
         </div>
 
-        {/* Error Alert */}
-        {errorMsg && (
-          <div className="mb-5 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-rose-300 text-xs font-medium animate-fade-in">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
+        {/* 🚨 SPECIALIZED UNAUTHORIZED DOMAIN DIAGNOSTIC CARD */}
+        <AnimatePresence>
+          {unauthorizedDomain && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="mb-5 p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-xs space-y-3"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-rose-200 text-sm leading-snug">
+                    Google Sign-In isn't enabled for this domain
+                  </h4>
+                  <p className="text-slate-300 mt-1 text-[11px] leading-relaxed">
+                    This deployment URL hasn't been authorized in Firebase Authentication.
+                  </p>
+                </div>
+              </div>
+
+              {/* Copyable current domain */}
+              <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950/70 border border-white/10 font-mono text-[11px]">
+                <span className="text-indigo-300 truncate">{currentHostname}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyDomain}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-semibold flex items-center gap-1 transition-all"
+                  title="Copy domain to clipboard"
+                >
+                  {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? "Copied" : "Copy"}</span>
+                </button>
+              </div>
+
+              {/* Direct Firebase Console Action */}
+              <div className="flex items-center justify-between pt-1 border-t border-rose-500/20 text-[11px]">
+                <a
+                  href="https://console.firebase.google.com/project/mern-e7943/authentication/settings"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-300 hover:text-indigo-200 font-semibold underline flex items-center gap-1 transition-colors"
+                >
+                  <span>Authorize in Firebase Console</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setUnauthorizedDomain(false)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Standard Error Alert */}
+        <AnimatePresence>
+          {errorMsg && !unauthorizedDomain && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              className="mb-5 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-rose-300 text-xs font-medium"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMsg("")}
+                className="text-rose-400 hover:text-rose-200 text-xs ml-2"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 🌟 GOOGLE AUTHENTICATION (PRIMARY ACTION) */}
         <div className="space-y-4">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.98 }}
             type="button"
             onClick={handleGoogleSignIn}
             disabled={googleLoading || loading}
-            className="group w-full py-3.5 px-4 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/10 shadow-lg shadow-black/20 flex items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 cursor-pointer"
+            className="group w-full py-3.5 px-4 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold border border-white/10 shadow-lg shadow-black/20 flex items-center justify-center gap-3 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {googleLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                <span>Connecting to Google...</span>
+                <span>Authorizing with Google...</span>
               </>
             ) : (
               <>
@@ -173,7 +333,7 @@ export default function Register() {
                 </span>
               </>
             )}
-          </button>
+          </motion.button>
 
           <div className="flex items-center gap-1.5 justify-center text-[11px] text-slate-400 font-medium">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -208,7 +368,8 @@ export default function Register() {
                 value={form.name}
                 onChange={handleChange}
                 required
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
+                disabled={loading || googleLoading}
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all disabled:opacity-50"
               />
             </div>
           </div>
@@ -226,7 +387,8 @@ export default function Register() {
                 value={form.email}
                 onChange={handleChange}
                 required
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
+                disabled={loading || googleLoading}
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all disabled:opacity-50"
               />
             </div>
           </div>
@@ -244,25 +406,30 @@ export default function Register() {
                 value={form.password}
                 onChange={handleChange}
                 required
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all"
+                disabled={loading || googleLoading}
+                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/30 transition-all disabled:opacity-50"
               />
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading || googleLoading}
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:scale-[1.02] text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition duration-200 disabled:opacity-60 cursor-pointer"
+            className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:scale-[1.02] text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Registering...</span>
+              </>
             ) : (
               <>
                 <span>Register with Email</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
-          </button>
+          </motion.button>
         </form>
 
         {/* Footer */}
@@ -275,7 +442,7 @@ export default function Register() {
             Sign in
           </Link>
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }
