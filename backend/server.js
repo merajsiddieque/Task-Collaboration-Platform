@@ -53,13 +53,21 @@ io.on("connection", (socket) => {
 });
 
 // =======================================
-// ROUTES
+// ROUTES & HEALTH CHECKS
 // =======================================
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "TaskFlow API is running live on Render" });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/boards", require("./routes/boardRoutes"));
 app.use("/api/lists", require("./routes/listRoutes"));
 app.use("/api/tasks", require("./routes/taskRoutes"));
-app.use("/api/activity", require("./routes/activityRoutes")); // if created
+app.use("/api/activity", require("./routes/activityRoutes"));
 
 // =======================================
 const PORT = process.env.PORT || 5000;
