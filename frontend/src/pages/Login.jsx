@@ -59,7 +59,9 @@ export default function Login() {
       if (error.code === "auth/popup-closed-by-user") {
         setErrorMsg("Google sign-in popup was closed before completing.");
       } else if (error.code === "auth/unauthorized-domain") {
-        setErrorMsg("This domain is not authorized in Firebase Console. Please add localhost to Authorized Domains.");
+        setErrorMsg(
+          `Domain "${window.location.hostname}" is not authorized in Firebase Console. Please add "${window.location.hostname}" to Authorized Domains in Firebase Authentication Settings.`
+        );
       } else {
         setErrorMsg(
           error.response?.data?.message ||
