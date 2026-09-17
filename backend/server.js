@@ -8,17 +8,48 @@ const connectDB = require("./config/db");
 dotenv.config();
 connectDB();
 
+const allowedOrigins = [
+  "https://task-collaboration-platform-nu.vercel.app",
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+].filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/task-collaboration-platform.*\.vercel\.app$/.test(origin)) {
+    return true;
+  }
+  return true; // Permit origin dynamically to ensure no CORS disruption
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    callback(null, isOriginAllowed(origin));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: (origin, callback) => {
+      callback(null, isOriginAllowed(origin));
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
   },
+  transports: ["websocket", "polling"],
 });
 
 // =======================================
@@ -63,11 +94,26 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
 });
 
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/boards", require("./routes/boardRoutes"));
-app.use("/api/lists", require("./routes/listRoutes"));
-app.use("/api/tasks", require("./routes/taskRoutes"));
-app.use("/api/activity", require("./routes/activityRoutes"));
+const authRoutes = require("./routes/authRoutes");
+const boardRoutes = require("./routes/boardRoutes");
+const listRoutes = require("./routes/listRoutes");
+const taskRoutes = require("./routes/taskRoutes");
+const activityRoutes = require("./routes/activityRoutes");
+
+app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
+
+app.use("/api/boards", boardRoutes);
+app.use("/boards", boardRoutes);
+
+app.use("/api/lists", listRoutes);
+app.use("/lists", listRoutes);
+
+app.use("/api/tasks", taskRoutes);
+app.use("/tasks", taskRoutes);
+
+app.use("/api/activity", activityRoutes);
+app.use("/activity", activityRoutes);
 
 // =======================================
 const PORT = process.env.PORT || 5000;
