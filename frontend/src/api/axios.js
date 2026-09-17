@@ -3,7 +3,7 @@ import axios from "axios";
 const instance = axios.create({
   baseURL:
     import.meta.env.VITE_API_BASE_URL ||
-    "https://taskflow-api-wly3.onrender.com/api",
+    "https://task-collaboration-platform-lkx0.onrender.com/api",
 });
 
 instance.interceptors.request.use((config) => {

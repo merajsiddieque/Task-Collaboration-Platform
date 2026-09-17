@@ -97,6 +97,10 @@ export default function Register() {
         setErrorMsg("Google sign-in popup was closed before completing.");
       } else if (error.code === "auth/cancelled-popup-request") {
         setErrorMsg("Only one sign-in popup can be opened at a time.");
+      } else if (error.code === "auth/network-request-failed") {
+        setErrorMsg("Firebase network error. Please verify your connection or check if an ad-blocker is blocking Firebase.");
+      } else if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
+        setErrorMsg("Cannot reach backend server. The Render instance may be spinning up from sleep (wait 30-50s and retry).");
       } else {
         setErrorMsg(
           error.response?.data?.message ||
